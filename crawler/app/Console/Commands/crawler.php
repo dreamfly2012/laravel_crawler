@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 
+use Illuminate\Support\Facades\DB;
+
 class crawler extends Command
 {
     /**
@@ -21,6 +23,13 @@ class crawler extends Command
     protected $description = 'crawler douban movie';
 
     /**
+     * 抓取间隔
+     * 
+     * @var int 秒
+     */
+    protected $interval = 60;
+
+    /**
      * 查询电影年份
      *
      * @var int
@@ -28,25 +37,30 @@ class crawler extends Command
     protected $keyword = 2014;
 
     /**
-     * cookie
+     * Cookie
      *
      * @var string
      */
     protected $cookie = 'bid=DDIGbIpffnk; ll="118137"; gr_user_id=9312f0e3-27f7-4a7d-b819-ed0bc555f9be; viewed="25710590"; _vwo_uuid_v2=74B01F86211CFF37C8D691104BCAAF30|e3b261ef4e4d8a29bb9e241000e57afb; __utma=30149280.206142211.1479954870.1494771822.1494830905.14; __utmc=30149280; __utmz=30149280.1494771822.13.6.utmcsr=kanmeizi.cn|utmccn=(referral)|utmcmd=referral|utmcct=/detail_82357037.html; __utmv=30149280.13850';
 
     /**
-     * url中上一页,即访问来源页
+     * Url中上一页,即访问来源页
      *
      * @var string
      */
     protected $referer = 'https://movie.douban.com/';
 
     /**
-     * http传递方式 0:get 1:post
+     * Http传递方式 0:get 1:post
      *
      * @var int
      */
     protected $is_post = 0;
+
+    /**
+     * 
+     */
+    protected $logpath = 'logs';
     
     /**
      * 传递的参数
@@ -155,13 +169,44 @@ class crawler extends Command
      */
     public function getcurl($url, $is_post, $curlPost, $referer, $cookie, $userAgent)
     {
+        $ch = curl_init();
+        //$ip = array('101.68.44.61','218.202.111.10','218.202.111.11','218.202.111.12','218.202.101.10','218.202.102.10','218.202.111.10','218.192.101.10','218.192.101.15','112.5.220.199','112.5.220.198','112.5.220.197','112.5.220.196','112.5.220.195','112.5.220.193','112.5.220.192','112.5.220.62');
+        //$postip = $ip[array_rand($ip,1)];
+        //curl_setopt($ch, CURLOPT_PROXY, $ip); //代理IP
+        //curl_setopt($ch, CURLOPT_PROXYPORT, $port); //代理端口
+        curl_setopt($ch, CURLOPT_COOKIE, $cookie);
+        if ($is_post) {
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $curlPost);
+        } else {
+            curl_setopt($ch, CURLOPT_POST, 0);
+        }
 
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 跳过证书检查 
+        //curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, true); // 从证书中检查SSL加密算法是否存在
+        //curl_setopt($ch, CURLOPT_HEADER, 1);
+        curl_setopt($ch, CURLOPT_USERAGENT, $useragent);
+        curl_setopt($ch, CURLOPT_URL, $url);
+        //curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_REFERER, $referer);
+        $page_content = curl_exec($ch);
+        curl_close($ch);
+        return $page_content;
     }
 
 
-    public function writeLog()
+    /**
+     * 日志写入
+     *
+     * @param string $loginfo 日志信息字符串
+     * 
+     * @return void
+     */
+    public function writeLog($loginfo)
     {
-        
+        $logname = date('Y-m-d').'.log';
+        file_put_contents($this->logpath.$logname, $loginfo, FILE_APPEND);
     }
 
 
@@ -176,40 +221,40 @@ class crawler extends Command
         for ($i=170;$i<200;$i++) {
             $start = $i*20;
             var_dump($i);
-            $url = "https://api.douban.com/v2/movie/search?tag=".$keyword."&start=".$start."&count=20";
+            $url = "https://api.douban.com/v2/movie/search?tag=" . $this->keyword . "&start=" . $start . "&count=20";
             $info = $this->get_curl($url, $sthi->is_post, $this->curlPost, $this->referer, $this->cookie, $this->userAgent);
             var_dump($info);
+            die;
             $obj = json_decode($info);
 
             if (!isset($obj->subjects)) {
                 die($i);
-                file_put_contents('douban_movie_2014.log', 'r\n爬取到第'.$i.'页', FILE_APPEND);
+                $info = '爬虫抓取到'. $i .'发生错误';
+                $this->writeLog($info);
             }
 
             $movies = $obj->subjects;
 
-            foreach($movies as $key=>$val){
+            foreach ($movies as $key=>$val) {
                 $mid = $val->id;
                 $url2 = "https://api.douban.com/v2/movie/subject/".$mid;
                 $info2 = get_curl($url2, $is_post, $curlPost, $referer, $cookie, $userAgent);
                 $movie = json_decode($info2);
-                if(isset($movie->title)){
+                if (isset($movie->title)) {
                     $name = $movie->title;
-                    $director = director_string($movie->directors);
-                    //$screenwriter = strip_tags($screenwriter_matches[1]);
-                    $actor = actor_string($movie->casts);
-                    $type = type_string($movie->genres);
-                    $region = region_string($movie->countries);;
+                    $director = $this->directorString($movie->directors);
+                    $actor = $this->actorString($movie->casts);
+                    $type = $this->typeString($movie->genres);
+                    $region = $this->regionString($movie->countries);;
                     $publishdate = $movie->year;
                     $avgrating = $movie->rating->average;
                     $commentcount = $movie->ratings_count;
-                    $addtime = date('Y-m-d H:i:s',time());
+                    $addtime = date('Y-m-d H:i:s', time());
 
                     $movie = new ApiMovie();
                     $movie->mid = $mid;
                     $movie->name = $name;
                     $movie->director = $director;
-                    //$movie->screenwriter = $screenwriter;
                     $movie->actor = $actor;
                     $movie->type = $type;
                     $movie->region = $region;
@@ -221,7 +266,7 @@ class crawler extends Command
                 }
                 
             }
-            $rand = mt_rand(60,180);
+            $rand = mt_rand($this->interval, 3*$this->interval);
             sleep($rand);
         }
     }
