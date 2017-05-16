@@ -1,12 +1,29 @@
 <?php
-
+/**
+ * 命令行抓取豆瓣电影
+ * 
+ * @category Crawler豆瓣电影抓取
+ * @package  Category
+ * @author   jfu <jia.fu2013@gmail.com>
+ * @license  MIT http://www.80shihua.com/
+ * @link     http://www.80shihua.com/
+ */
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 
 use Illuminate\Support\Facades\DB;
 
-class crawler extends Command
+/**
+ * 爬虫通过豆瓣api获取电影信息
+ * 
+ * @category Php7
+ * @package  Crawler豆瓣电影抓取
+ * @author   jfu <jia.fu2013@gmail.com>
+ * @license  MIT http://www.80shihua.com/
+ * @link     http://www.80shihua.com/
+ */
+class Crawler extends Command
 {
     /**
      * The name and signature of the console command.
@@ -250,14 +267,6 @@ class crawler extends Command
      */
     public function handle()
     {
-        $info =  'this is a test';
-        var_dump(storage_path());
-       
-        $this->writeLog($info);
-        
-        die;
-        
-        
         //处理爬虫程序
         for ($i=0;$i<10;$i++) {
             $start = $i*20;
