@@ -268,7 +268,7 @@ class Crawler extends Command
     public function handle()
     {
         //处理爬虫程序
-        for ($i=0;$i<10;$i++) {
+        for ($i=6;$i<10;$i++) {
             $start = $i*20;
             var_dump($i);
             $url = "https://api.douban.com/v2/movie/search?tag=" . $this->keyword . "&start=" . $start . "&count=20";
