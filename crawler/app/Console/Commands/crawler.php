@@ -58,9 +58,11 @@ class crawler extends Command
     protected $is_post = 0;
 
     /**
+     * Log日志位置
      * 
+     * @var string
      */
-    protected $logpath = 'logs';
+    protected $logpath = 'logs/';
     
     /**
      * 传递的参数
@@ -156,6 +158,23 @@ class crawler extends Command
     }
 
     /**
+     * 获取最大图片
+     * 
+     * @param string $images 图片
+     *
+     * @return void
+     */
+    public function imagesString($images)
+    {
+        $image = "";
+        foreach ($images as $key=>$val) {
+            $image .= $val->large . ',';
+        }
+        $image = trim($image, ','); 
+        return $image;
+    }
+
+    /**
      * Http访问请求
      * 
      * @param string $url       请求url
@@ -185,7 +204,7 @@ class crawler extends Command
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 跳过证书检查 
         //curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, true); // 从证书中检查SSL加密算法是否存在
         //curl_setopt($ch, CURLOPT_HEADER, 1);
-        curl_setopt($ch, CURLOPT_USERAGENT, $useragent);
+        curl_setopt($ch, CURLOPT_USERAGENT, $userAgent);
         curl_setopt($ch, CURLOPT_URL, $url);
         //curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -206,7 +225,21 @@ class crawler extends Command
     public function writeLog($loginfo)
     {
         $logname = date('Y-m-d').'.log';
-        file_put_contents($this->logpath.$logname, $loginfo, FILE_APPEND);
+        file_put_contents(storage_path() . '/' . $this->logpath.$logname, $loginfo, FILE_APPEND);
+    }
+
+    /**
+     * 格式化打印数组对象结构
+     *
+     * @param string $arr 对象/数组 
+     * 
+     * @return void
+     */
+    public function dump($arr)
+    {
+        echo "<pre>";
+        var_dump($arr);
+        echo "</pre>";
     }
 
 
@@ -217,14 +250,20 @@ class crawler extends Command
      */
     public function handle()
     {
+        $info =  'this is a test';
+        var_dump(storage_path());
+       
+        $this->writeLog($info);
+        
+        die;
+        
+        
         //处理爬虫程序
-        for ($i=170;$i<200;$i++) {
+        for ($i=0;$i<10;$i++) {
             $start = $i*20;
             var_dump($i);
             $url = "https://api.douban.com/v2/movie/search?tag=" . $this->keyword . "&start=" . $start . "&count=20";
-            $info = $this->get_curl($url, $sthi->is_post, $this->curlPost, $this->referer, $this->cookie, $this->userAgent);
-            var_dump($info);
-            die;
+            $info = $this->getcurl($url, $this->is_post, $this->curlPost, $this->referer, $this->cookie, $this->userAgent);
             $obj = json_decode($info);
 
             if (!isset($obj->subjects)) {
@@ -238,31 +277,39 @@ class crawler extends Command
             foreach ($movies as $key=>$val) {
                 $mid = $val->id;
                 $url2 = "https://api.douban.com/v2/movie/subject/".$mid;
-                $info2 = get_curl($url2, $is_post, $curlPost, $referer, $cookie, $userAgent);
+                $info2 = $this->getcurl($url2, $this->is_post, $this->curlPost, $this->referer, $this->cookie, $this->userAgent);
                 $movie = json_decode($info2);
                 if (isset($movie->title)) {
                     $name = $movie->title;
+                    $summary = $movie->summary;
                     $director = $this->directorString($movie->directors);
                     $actor = $this->actorString($movie->casts);
                     $type = $this->typeString($movie->genres);
-                    $region = $this->regionString($movie->countries);;
+                    $region = $this->regionString($movie->countries);
+                    $images = $movie->images->large;
                     $publishdate = $movie->year;
-                    $avgrating = $movie->rating->average;
-                    $commentcount = $movie->ratings_count;
+                    $avgrating = isset($movie->rating->average) ? $movie->rating->average : 0;
+                    $commentcount = isset($movie->comments_count) ? $movie->comments_count : 0;
+                    $ratingcount = isset($movie->ratings_count) ? $movie->ratings_count : 0;
                     $addtime = date('Y-m-d H:i:s', time());
 
-                    $movie = new ApiMovie();
-                    $movie->mid = $mid;
-                    $movie->name = $name;
-                    $movie->director = $director;
-                    $movie->actor = $actor;
-                    $movie->type = $type;
-                    $movie->region = $region;
-                    $movie->publishdate = $publishdate;
-                    $movie->avgrating = $avgrating;
-                    $movie->commentcount = $commentcount;
-                    $movie->addtime = $addtime;
-                    $movie->save();
+                    $info = DB::table('douban')
+                        ->where('mid', $mid)
+                        ->first();
+
+                    if (empty($info)) {
+                        $arr = ['mid'=>$mid, 'summary'=>$summary, 'ratingcount'=>$ratingcount, 'addtime'=>$addtime, 'name'=>$name, 'director'=>$director, 'actor'=>$actor, 'type'=>$type, 'region'=>$region, 'publishdate'=>$publishdate, 'avgrating'=>$avgrating, 'commentcount'=>$commentcount, 'images'=>$images];
+                        DB::table('douban')->insert(
+                            $arr
+                        );
+                    } else {
+                        $arr = ['mid'=>$mid, 'summary'=>$summary, 'ratingcount'=>$ratingcount, 'addtime'=>$addtime, 'name'=>$name, 'director'=>$director, 'actor'=>$actor, 'type'=>$type, 'region'=>$region, 'publishdate'=>$publishdate, 'avgrating'=>$avgrating, 'commentcount'=>$commentcount, 'images'=>$images];
+                        DB::table('douban')
+                        ->where('mid', $mid)
+                        ->update(
+                            $arr
+                        );
+                    }
                 }
                 
             }
